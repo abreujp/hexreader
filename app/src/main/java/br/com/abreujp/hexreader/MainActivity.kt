@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,9 +35,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -88,6 +91,8 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
     val searchUnavailableError = stringResource(R.string.search_results_error_description)
     val downloadUnavailableError = stringResource(R.string.package_details_download_error)
     val downloadSuccessMessage = stringResource(R.string.package_details_download_success)
+    val deleteSuccessMessage = stringResource(R.string.package_details_delete_success)
+    val deleteErrorMessage = stringResource(R.string.package_details_delete_error)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPackage by remember { mutableStateOf<HexPackageSummary?>(null) }
@@ -135,6 +140,19 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
                         DownloadUiState.Success(downloadSuccessMessage)
                     } catch (_: Exception) {
                         DownloadUiState.Error(downloadUnavailableError)
+                    }
+                }
+            },
+            onDelete = {
+                coroutineScope.launch {
+                    downloadState = DownloadUiState.Loading
+
+                    downloadState = try {
+                        offlineDocsRepository.deletePackage(selectedPackage!!.name)
+                        downloadedPackages = offlineDocsRepository.listDownloadedPackages()
+                        DownloadUiState.Success(deleteSuccessMessage)
+                    } catch (_: Exception) {
+                        DownloadUiState.Error(deleteErrorMessage)
                     }
                 }
             }
@@ -214,7 +232,13 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
 
             DownloadedDocumentationSection(
                 downloadedPackages = downloadedPackages,
-                onOpenDownloadedPackage = { openedDownloadedPackage = it }
+                onOpenDownloadedPackage = { openedDownloadedPackage = it },
+                onDeleteDownloadedPackage = { pkg ->
+                    coroutineScope.launch {
+                        offlineDocsRepository.deletePackage(pkg.name)
+                        downloadedPackages = offlineDocsRepository.listDownloadedPackages()
+                    }
+                }
             )
         }
     }
@@ -516,8 +540,41 @@ private fun PackageDetailsScreen(
     isAlreadyDownloaded: Boolean,
     onBack: () -> Unit,
     onOpenOffline: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text(stringResource(R.string.package_details_delete_dialog_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.package_details_delete_dialog_description,
+                        selectedPackage.name
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    }
+                ) {
+                    Text(text = stringResource(R.string.package_details_delete_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text(text = stringResource(R.string.package_details_delete_cancel))
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -680,6 +737,16 @@ private fun PackageDetailsScreen(
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = { showDeleteConfirmation = true },
+                            enabled = downloadState !is DownloadUiState.Loading,
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text(text = stringResource(R.string.package_details_delete_button))
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     Button(
@@ -757,10 +824,10 @@ private fun OfflineReaderScreen(
             factory = { context ->
                 WebView(context).apply {
                     webViewClient = WebViewClient()
-                    settings.javaScriptEnabled = false
+                    settings.javaScriptEnabled = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = true
-                    settings.domStorageEnabled = false
+                    settings.domStorageEnabled = true
                 }
             },
             update = { webView ->
@@ -839,7 +906,8 @@ private fun PackageBadge(text: String, emphasized: Boolean = true) {
 @Composable
 private fun DownloadedDocumentationSection(
     downloadedPackages: List<DownloadedPackage>,
-    onOpenDownloadedPackage: (DownloadedPackage) -> Unit
+    onOpenDownloadedPackage: (DownloadedPackage) -> Unit,
+    onDeleteDownloadedPackage: (DownloadedPackage) -> Unit
 ) {
     SectionTitle(text = stringResource(R.string.downloaded_docs_title))
 
@@ -892,6 +960,38 @@ private fun DownloadedDocumentationSection(
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             downloadedPackages.forEach { item ->
+                var showDeleteConfirmation by remember(item.name) { mutableStateOf(false) }
+
+                if (showDeleteConfirmation) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirmation = false },
+                        title = { Text(stringResource(R.string.package_details_delete_dialog_title)) },
+                        text = {
+                            Text(
+                                stringResource(
+                                    R.string.package_details_delete_dialog_description,
+                                    item.name
+                                )
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showDeleteConfirmation = false
+                                    onDeleteDownloadedPackage(item)
+                                }
+                            ) {
+                                Text(text = stringResource(R.string.package_details_delete_confirm))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteConfirmation = false }) {
+                                Text(text = stringResource(R.string.package_details_delete_cancel))
+                            }
+                        }
+                    )
+                }
+
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -941,6 +1041,15 @@ private fun DownloadedDocumentationSection(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        OutlinedButton(
+                            onClick = { showDeleteConfirmation = true },
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text(text = stringResource(R.string.package_details_delete_button))
+                        }
                     }
                 }
             }

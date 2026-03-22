@@ -24,6 +24,19 @@ class OfflineDocsRepository(
         readMetadata()
     }
 
+    suspend fun deletePackage(packageName: String) = withContext(Dispatchers.IO) {
+        val currentPackages = readMetadata()
+        val packageToDelete = currentPackages.firstOrNull { it.name == packageName } ?: return@withContext
+
+        File(packageToDelete.localIndexPath).parentFile?.deleteRecursively()
+
+        val remainingPackages = currentPackages.filterNot { it.name == packageName }
+        val array = JSONArray()
+        remainingPackages.forEach { pkg -> array.put(pkg.toJson()) }
+
+        metadataFile.writeText(array.toString())
+    }
+
     suspend fun downloadPackage(pkg: HexPackageSummary): DownloadedPackage = withContext(Dispatchers.IO) {
         require(pkg.docsUrl.isNotBlank()) { "Package has no docs URL" }
 
