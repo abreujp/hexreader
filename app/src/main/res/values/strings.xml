@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">HexReader</string>
+    <string name="home_subtitle">Offline HexDocs reader</string>
+    <string name="search_library_title">Search library</string>
+    <string name="search_library_description">Soon, you will be able to search Hex.pm packages and download documentation for offline reading.</string>
+    <string name="downloaded_docs_title">Downloaded documentation</string>
+    <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
+    <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
 </resources>
