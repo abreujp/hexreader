@@ -1,9 +1,19 @@
 <resources>
     <string name="app_name">HexReader</string>
     <string name="home_subtitle">Offline HexDocs reader</string>
+    <string name="header_badge">Hex.pm docsets</string>
     <string name="search_library_title">Search library</string>
-    <string name="search_library_description">Soon, you will be able to search Hex.pm packages and download documentation for offline reading.</string>
+    <string name="search_library_description">Search Hex.pm packages and prepare docsets for offline reading on Android.</string>
+    <string name="search_library_input_label">Package name</string>
+    <string name="search_library_placeholder">phoenix_live_view</string>
+    <string name="search_library_button">Search</string>
+    <string name="search_results_title">Search results</string>
+    <string name="search_results_idle_title">Start with a package name</string>
+    <string name="search_results_idle_description">Search results will appear here after you look for a Hex.pm package.</string>
+    <string name="search_results_empty_title">No results yet for "%1$s"</string>
+    <string name="search_results_empty_description">The search action is wired to the interface, but package lookup will be added next.</string>
     <string name="downloaded_docs_title">Downloaded documentation</string>
+    <string name="downloaded_docs_badge">Offline library</string>
     <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
     <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
 </resources>
