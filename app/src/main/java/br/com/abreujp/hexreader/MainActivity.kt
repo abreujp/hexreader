@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,14 +17,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -71,8 +77,18 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
     val searchUnavailableError = stringResource(R.string.search_results_error_description)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedPackage by remember { mutableStateOf<HexPackageSummary?>(null) }
     var searchState by remember {
         mutableStateOf<SearchUiState>(SearchUiState.Idle)
+    }
+
+    if (selectedPackage != null) {
+        PackageDetailsScreen(
+            selectedPackage = selectedPackage!!,
+            onBack = { selectedPackage = null }
+        )
+
+        return
     }
 
     Box(
@@ -138,7 +154,8 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
 
             SearchResultsSection(
                 submittedQuery = submittedQuery,
-                searchState = searchState
+                searchState = searchState,
+                onPackageSelected = { selectedPackage = it }
             )
 
             Spacer(modifier = Modifier.height(28.dp))
@@ -248,7 +265,8 @@ private fun SearchSection(
 @Composable
 private fun SearchResultsSection(
     submittedQuery: String?,
-    searchState: SearchUiState
+    searchState: SearchUiState,
+    onPackageSelected: (HexPackageSummary) -> Unit
 ) {
     SectionTitle(text = stringResource(R.string.search_results_title))
 
@@ -325,7 +343,10 @@ private fun SearchResultsSection(
                 )
 
                 searchState.packages.take(15).forEach { item ->
-                    SearchResultCard(item = item)
+                    SearchResultCard(
+                        item = item,
+                        onClick = { onPackageSelected(item) }
+                    )
                 }
             }
         }
@@ -366,9 +387,11 @@ private fun SearchFeedbackCard(title: String, description: String) {
 }
 
 @Composable
-private fun SearchResultCard(item: HexPackageSummary) {
+private fun SearchResultCard(item: HexPackageSummary, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -411,7 +434,176 @@ private fun SearchResultCard(item: HexPackageSummary) {
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = stringResource(R.string.search_results_open_details),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
         }
+    }
+}
+
+@Composable
+private fun PackageDetailsScreen(
+    selectedPackage: HexPackageSummary,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surface
+                    )
+                )
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 24.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.package_details_back)
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = stringResource(R.string.package_details_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Text(
+                        text = selectedPackage.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PackageBadge(
+                            text = selectedPackage.latestVersion.ifBlank {
+                                stringResource(R.string.search_results_unknown_version)
+                            }
+                        )
+
+                        if (selectedPackage.hasDocs) {
+                            PackageBadge(
+                                text = stringResource(R.string.search_results_has_docs_badge),
+                                emphasized = false
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = selectedPackage.description.ifBlank {
+                            stringResource(R.string.search_results_missing_description)
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    DetailRow(
+                        label = stringResource(R.string.package_details_weekly_downloads_label),
+                        value = selectedPackage.weeklyDownloads.toString()
+                    )
+                    DetailRow(
+                        label = stringResource(R.string.package_details_docs_url_label),
+                        value = selectedPackage.docsUrl.ifBlank {
+                            stringResource(R.string.package_details_not_available)
+                        }
+                    )
+                    DetailRow(
+                        label = stringResource(R.string.package_details_package_url_label),
+                        value = selectedPackage.packageUrl.ifBlank {
+                            stringResource(R.string.package_details_not_available)
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text(
+                        text = stringResource(R.string.package_details_download_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = stringResource(R.string.package_details_download_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Button(onClick = {}, shape = RoundedCornerShape(18.dp)) {
+                        Text(text = stringResource(R.string.package_details_download_button))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
     }
 }
 

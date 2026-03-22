@@ -22,8 +22,18 @@
     <string name="search_results_has_docs_badge">docs</string>
     <string name="search_results_missing_description">No package description was provided.</string>
     <string name="search_results_weekly_downloads">%1$d weekly downloads</string>
+    <string name="search_results_open_details">Open package details</string>
     <string name="downloaded_docs_title">Downloaded documentation</string>
     <string name="downloaded_docs_badge">Offline library</string>
     <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
     <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
+    <string name="package_details_back">Back to search</string>
+    <string name="package_details_title">Package details</string>
+    <string name="package_details_weekly_downloads_label">Weekly downloads</string>
+    <string name="package_details_docs_url_label">Docs URL</string>
+    <string name="package_details_package_url_label">Package URL</string>
+    <string name="package_details_not_available">Not available</string>
+    <string name="package_details_download_title">Download docset</string>
+    <string name="package_details_download_description">The next step is downloading and extracting the package docset so it can be read offline.</string>
+    <string name="package_details_download_button">Download docset</string>
 </resources>
