@@ -113,7 +113,10 @@ class HomeViewModel(
 
                     it.copy(
                         screen = nextScreen,
-                        openedDownloadedPackage = null
+                        openedDownloadedPackage = null,
+                        searchQuery = if (nextScreen == HexReaderScreen.Home) "" else it.searchQuery,
+                        submittedQuery = if (nextScreen == HexReaderScreen.Home) null else it.submittedQuery,
+                        searchState = if (nextScreen == HexReaderScreen.Home) SearchUiState.Idle else it.searchState
                     )
                 }
             }
