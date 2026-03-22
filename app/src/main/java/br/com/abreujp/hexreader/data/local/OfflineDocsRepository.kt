@@ -1,6 +1,10 @@
-package br.com.abreujp.hexreader.data
+package br.com.abreujp.hexreader.data.local
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
+import br.com.abreujp.hexreader.core.model.DownloadedPackage
+import br.com.abreujp.hexreader.core.model.HexPackageSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -33,7 +37,6 @@ class OfflineDocsRepository(
         val remainingPackages = currentPackages.filterNot { it.name == packageName }
         val array = JSONArray()
         remainingPackages.forEach { pkg -> array.put(pkg.toJson()) }
-
         metadataFile.writeText(array.toString())
     }
 
@@ -47,8 +50,15 @@ class OfflineDocsRepository(
             mkdirs()
         }
 
-        val baseUrl = pkg.docsUrl.ensureTrailingSlash()
-        val entryPath = mirrorDocs(baseUrl, packageDir)
+        val entryPath = try {
+            mirrorDocs(pkg.docsUrl.ensureTrailingSlash(), packageDir)
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to mirror docs for ${pkg.name} from ${pkg.docsUrl}", exception)
+            throw IllegalStateException(
+                exception.message ?: "Failed to download package docs",
+                exception
+            )
+        }
         val entryFile = File(packageDir, entryPath)
 
         val downloadedPackage = DownloadedPackage(
@@ -112,7 +122,7 @@ class OfflineDocsRepository(
         }
 
         val rootResource = fetchResource(baseHttpUrl, "index.html")
-            ?: throw IllegalStateException("Failed to download docs entry page")
+            ?: throw IllegalStateException("Failed to download docs entry page: index.html")
 
         val rootHtml = rootResource.body.toString(Charsets.UTF_8)
         val redirectTarget = extractMetaRefreshTarget(rootHtml)
@@ -127,16 +137,17 @@ class OfflineDocsRepository(
         val request = Request.Builder().url(url).get().build()
 
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Skipping resource ${url} with HTTP ${response.code}")
+                return null
+            }
 
             val body = response.body?.bytes() ?: return null
             if (body.isEmpty()) return null
 
-            val contentType = response.header("Content-Type").orEmpty()
-
             return DownloadedResource(
                 body = body,
-                kind = resourceKind(contentType, relativePath)
+                kind = resourceKind(response.header("Content-Type").orEmpty(), relativePath)
             )
         }
     }
@@ -149,7 +160,7 @@ class OfflineDocsRepository(
                 .toList()
         }
 
-        val metaRefresh = extractMetaRefreshTarget(html)?.let { listOf(it) }.orEmpty()
+        val metaRefresh = extractMetaRefreshTarget(html)?.let(::listOf).orEmpty()
 
         return (attributeValues + metaRefresh)
             .flatMap { value -> resolvePath(value, currentPath, baseHttpUrl) }
@@ -169,8 +180,17 @@ class OfflineDocsRepository(
         if (ignoredReference(value)) return emptyList()
 
         val currentUrl = baseHttpUrl.resolve(currentPath) ?: return emptyList()
-        val resolvedUrl = URI(currentUrl.toString()).resolve(value)
-        val resolvedPath = resolvedUrl.path ?: return emptyList()
+        val resolvedPath = try {
+            val sanitizedValue = sanitizeReference(value)
+            URI(currentUrl.toString()).resolve(sanitizedValue).path
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "Skipping invalid reference '$value' from '$currentPath'", exception)
+            null
+        } catch (exception: Exception) {
+            Log.w(TAG, "Failed to resolve reference '$value' from '$currentPath'", exception)
+            null
+        } ?: return emptyList()
+
         val basePath = baseHttpUrl.encodedPath
 
         if (!resolvedPath.startsWith(basePath) || ignoredExtension(resolvedPath)) {
@@ -199,7 +219,6 @@ class OfflineDocsRepository(
         if (content.isBlank()) return emptyList()
 
         val array = JSONArray(content)
-
         return List(array.length()) { index ->
             array.getJSONObject(index).toDownloadedPackage()
         }.sortedByDescending { it.downloadedAt }
@@ -213,7 +232,6 @@ class OfflineDocsRepository(
 
         val array = JSONArray()
         updatedPackages.forEach { pkg -> array.put(pkg.toJson()) }
-
         metadataFile.writeText(array.toString())
     }
 
@@ -227,6 +245,11 @@ class OfflineDocsRepository(
             value.startsWith("mailto:") ||
             value.startsWith("javascript:") ||
             value.startsWith("data:")
+    }
+
+    private fun sanitizeReference(value: String): String {
+        val trimmedValue = value.trim()
+        return Uri.encode(trimmedValue, "/:@?&=#.-_~!$'()*+,;%")
     }
 
     private fun ignoredExtension(path: String): Boolean {
@@ -257,6 +280,7 @@ class OfflineDocsRepository(
     }
 
     private companion object {
+        const val TAG = "OfflineDocsRepository"
         val trackedAttributes = listOf("href", "src", "action")
         val ignoredExtensions = listOf(".epub", ".pdf", ".zip", ".tar", ".gz")
     }

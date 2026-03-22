@@ -26,7 +26,7 @@
     <string name="downloaded_docs_title">Downloaded documentation</string>
     <string name="downloaded_docs_badge">Offline library</string>
     <string name="downloaded_docs_saved_badge">saved offline</string>
-    <string name="downloaded_docs_open_offline">Open offline reader</string>
+    <string name="downloaded_docs_open_offline">Open offline</string>
     <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
     <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
     <string name="package_details_back">Back to search</string>
@@ -41,13 +41,13 @@
     <string name="package_details_download_button">Download docs</string>
     <string name="package_details_redownload_button">Download again</string>
     <string name="package_details_open_offline_button">Open offline docs</string>
-    <string name="package_details_delete_button">Delete offline docs</string>
+    <string name="package_details_delete_button">Delete docs</string>
     <string name="package_details_delete_dialog_title">Delete offline documentation?</string>
     <string name="package_details_delete_dialog_description">This removes the saved offline files for "%1$s" from the device.</string>
     <string name="package_details_delete_confirm">Delete</string>
     <string name="package_details_delete_cancel">Cancel</string>
     <string name="package_details_download_success">Offline docs saved successfully.</string>
-    <string name="package_details_download_error">The docs could not be downloaded right now. Try again in a moment.</string>
+    <string name="package_details_download_error">Failed to download the package docs.</string>
     <string name="package_details_delete_success">Offline docs deleted successfully.</string>
     <string name="package_details_delete_error">The offline docs could not be deleted right now. Try again in a moment.</string>
     <string name="offline_reader_back">Back to package details</string>

@@ -1,5 +1,6 @@
-package br.com.abreujp.hexreader.data
+package br.com.abreujp.hexreader.data.remote
 
+import br.com.abreujp.hexreader.core.model.HexPackageSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -38,9 +39,8 @@ class HexPackagesRepository(
     private fun fetchExactPackage(packageName: String): HexPackageSummary? {
         if (packageName.isBlank()) return null
 
-        val url = "https://hex.pm/api/packages/${packageName.lowercase()}"
         val request = Request.Builder()
-            .url(url)
+            .url("https://hex.pm/api/packages/${packageName.lowercase()}")
             .get()
             .build()
 
@@ -58,8 +58,9 @@ class HexPackagesRepository(
         if (body.isBlank()) return emptyList()
 
         val array = JSONArray(body)
-
-        return List(array.length()) { index -> parsePackage(array.getJSONObject(index).toString()) }
+        return List(array.length()) { index ->
+            parsePackage(array.getJSONObject(index).toString())
+        }
     }
 
     private fun parsePackage(body: String): HexPackageSummary {
@@ -97,7 +98,6 @@ private fun List<HexPackageSummary>.rankForQuery(query: String): List<HexPackage
     val normalizedQuery = query.lowercase()
     val exactMatches = filter { it.name.lowercase() == normalizedQuery }
     val nameMatches = filter { it.name.lowercase().contains(normalizedQuery) }
-
     val candidates = if (nameMatches.isNotEmpty()) nameMatches else this
 
     val sortedCandidates = candidates

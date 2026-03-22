@@ -1,4 +1,4 @@
-package br.com.abreujp.hexreader.data
+package br.com.abreujp.hexreader.core.model
 
 data class DownloadedPackage(
     val name: String,
