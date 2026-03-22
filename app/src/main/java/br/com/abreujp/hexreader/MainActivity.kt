@@ -35,21 +35,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import br.com.abreujp.hexreader.data.DownloadedPackage
 import br.com.abreujp.hexreader.data.HexPackageSummary
 import br.com.abreujp.hexreader.data.HexPackagesRepository
+import br.com.abreujp.hexreader.data.OfflineDocsRepository
 import br.com.abreujp.hexreader.ui.theme.HexReaderTheme
 import kotlinx.coroutines.launch
 
@@ -71,21 +75,49 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HexReaderHome(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val repository = remember { HexPackagesRepository() }
+    val offlineDocsRepository = remember(context) { OfflineDocsRepository(context) }
     val coroutineScope = rememberCoroutineScope()
     val blankSearchError = stringResource(R.string.search_blank_error)
     val searchUnavailableError = stringResource(R.string.search_results_error_description)
+    val downloadUnavailableError = stringResource(R.string.package_details_download_error)
+    val downloadSuccessMessage = stringResource(R.string.package_details_download_success)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPackage by remember { mutableStateOf<HexPackageSummary?>(null) }
+    var downloadedPackages by remember { mutableStateOf<List<DownloadedPackage>>(emptyList()) }
+    var downloadState by remember { mutableStateOf<DownloadUiState>(DownloadUiState.Idle) }
     var searchState by remember {
         mutableStateOf<SearchUiState>(SearchUiState.Idle)
+    }
+
+    LaunchedEffect(Unit) {
+        downloadedPackages = offlineDocsRepository.listDownloadedPackages()
     }
 
     if (selectedPackage != null) {
         PackageDetailsScreen(
             selectedPackage = selectedPackage!!,
-            onBack = { selectedPackage = null }
+            downloadState = downloadState,
+            isAlreadyDownloaded = downloadedPackages.any { it.name == selectedPackage!!.name },
+            onBack = {
+                selectedPackage = null
+                downloadState = DownloadUiState.Idle
+            },
+            onDownload = {
+                coroutineScope.launch {
+                    downloadState = DownloadUiState.Loading
+
+                    downloadState = try {
+                        offlineDocsRepository.downloadPackage(selectedPackage!!)
+                        downloadedPackages = offlineDocsRepository.listDownloadedPackages()
+                        DownloadUiState.Success(downloadSuccessMessage)
+                    } catch (_: Exception) {
+                        DownloadUiState.Error(downloadUnavailableError)
+                    }
+                }
+            }
         )
 
         return
@@ -160,7 +192,7 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            DownloadedDocumentationSection()
+            DownloadedDocumentationSection(downloadedPackages = downloadedPackages)
         }
     }
 }
@@ -171,6 +203,13 @@ private sealed interface SearchUiState {
     data class Success(val packages: List<HexPackageSummary>) : SearchUiState
     data class Empty(val query: String) : SearchUiState
     data class Error(val message: String) : SearchUiState
+}
+
+private sealed interface DownloadUiState {
+    data object Idle : DownloadUiState
+    data object Loading : DownloadUiState
+    data class Success(val message: String) : DownloadUiState
+    data class Error(val message: String) : DownloadUiState
 }
 
 @Composable
@@ -450,7 +489,10 @@ private fun SearchResultCard(item: HexPackageSummary, onClick: () -> Unit) {
 @Composable
 private fun PackageDetailsScreen(
     selectedPackage: HexPackageSummary,
-    onBack: () -> Unit
+    downloadState: DownloadUiState,
+    isAlreadyDownloaded: Boolean,
+    onBack: () -> Unit,
+    onDownload: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -570,15 +612,60 @@ private fun PackageDetailsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = stringResource(R.string.package_details_download_description),
+                        text = if (isAlreadyDownloaded) {
+                            stringResource(R.string.package_details_downloaded_description)
+                        } else {
+                            stringResource(R.string.package_details_download_description)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
+                    if (downloadState is DownloadUiState.Success) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = downloadState.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    if (downloadState is DownloadUiState.Error) {
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = downloadState.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(onClick = {}, shape = RoundedCornerShape(18.dp)) {
-                        Text(text = stringResource(R.string.package_details_download_button))
+                    Button(
+                        onClick = onDownload,
+                        enabled = downloadState !is DownloadUiState.Loading,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        if (downloadState is DownloadUiState.Loading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+
+                            Spacer(modifier = Modifier.size(8.dp))
+                        }
+
+                        Text(
+                            text = if (isAlreadyDownloaded) {
+                                stringResource(R.string.package_details_redownload_button)
+                            } else {
+                                stringResource(R.string.package_details_download_button)
+                            }
+                        )
                     }
                 }
             }
@@ -636,52 +723,99 @@ private fun PackageBadge(text: String, emphasized: Boolean = true) {
 }
 
 @Composable
-private fun DownloadedDocumentationSection() {
+private fun DownloadedDocumentationSection(downloadedPackages: List<DownloadedPackage>) {
     SectionTitle(text = stringResource(R.string.downloaded_docs_title))
 
     Spacer(modifier = Modifier.height(12.dp))
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = CircleShape
+    if (downloadedPackages.isEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = CircleShape
+                            )
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.downloaded_docs_badge),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.SemiBold
                         )
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        text = stringResource(R.string.downloaded_docs_badge),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.SemiBold
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = stringResource(R.string.empty_downloaded_docs_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = stringResource(R.string.empty_downloaded_docs_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            downloadedPackages.forEach { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
                     )
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PackageBadge(
+                                text = item.latestVersion.ifBlank {
+                                    stringResource(R.string.search_results_unknown_version)
+                                }
+                            )
+
+                            PackageBadge(
+                                text = stringResource(R.string.downloaded_docs_saved_badge),
+                                emphasized = false
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = item.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = item.description.ifBlank {
+                                stringResource(R.string.search_results_missing_description)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = stringResource(R.string.empty_downloaded_docs_title),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.empty_downloaded_docs_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

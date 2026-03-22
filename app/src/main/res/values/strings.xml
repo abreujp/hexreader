@@ -1,9 +1,9 @@
 <resources>
     <string name="app_name">HexReader</string>
     <string name="home_subtitle">Offline HexDocs reader</string>
-    <string name="header_badge">Hex.pm docsets</string>
+    <string name="header_badge">Hex.pm docs</string>
     <string name="search_library_title">Search library</string>
-    <string name="search_library_description">Search Hex.pm packages and prepare docsets for offline reading on Android.</string>
+    <string name="search_library_description">Search Hex.pm packages and save their docs for offline reading on Android.</string>
     <string name="search_library_input_label">Package name</string>
     <string name="search_library_placeholder">phoenix_live_view</string>
     <string name="search_library_button">Search</string>
@@ -25,6 +25,7 @@
     <string name="search_results_open_details">Open package details</string>
     <string name="downloaded_docs_title">Downloaded documentation</string>
     <string name="downloaded_docs_badge">Offline library</string>
+    <string name="downloaded_docs_saved_badge">saved offline</string>
     <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
     <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
     <string name="package_details_back">Back to search</string>
@@ -33,7 +34,11 @@
     <string name="package_details_docs_url_label">Docs URL</string>
     <string name="package_details_package_url_label">Package URL</string>
     <string name="package_details_not_available">Not available</string>
-    <string name="package_details_download_title">Download docset</string>
-    <string name="package_details_download_description">The next step is downloading and extracting the package docset so it can be read offline.</string>
-    <string name="package_details_download_button">Download docset</string>
+    <string name="package_details_download_title">Save offline docs</string>
+    <string name="package_details_download_description">This downloads the main HexDocs page for the package and stores it locally in the app.</string>
+    <string name="package_details_downloaded_description">This package already has offline docs saved locally. You can download it again to refresh the stored page.</string>
+    <string name="package_details_download_button">Download docs</string>
+    <string name="package_details_redownload_button">Download again</string>
+    <string name="package_details_download_success">Offline docs saved successfully.</string>
+    <string name="package_details_download_error">The docs could not be downloaded right now. Try again in a moment.</string>
 </resources>
