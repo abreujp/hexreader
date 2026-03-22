@@ -2,6 +2,8 @@ package br.com.abreujp.hexreader
 
 import android.content.res.Configuration
 import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,12 +53,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import br.com.abreujp.hexreader.data.DownloadedPackage
 import br.com.abreujp.hexreader.data.HexPackageSummary
 import br.com.abreujp.hexreader.data.HexPackagesRepository
 import br.com.abreujp.hexreader.data.OfflineDocsRepository
 import br.com.abreujp.hexreader.ui.theme.HexReaderTheme
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -86,6 +91,7 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var submittedQuery by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedPackage by remember { mutableStateOf<HexPackageSummary?>(null) }
+    var openedDownloadedPackage by remember { mutableStateOf<DownloadedPackage?>(null) }
     var downloadedPackages by remember { mutableStateOf<List<DownloadedPackage>>(emptyList()) }
     var downloadState by remember { mutableStateOf<DownloadUiState>(DownloadUiState.Idle) }
     var searchState by remember {
@@ -96,6 +102,15 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
         downloadedPackages = offlineDocsRepository.listDownloadedPackages()
     }
 
+    if (openedDownloadedPackage != null) {
+        OfflineReaderScreen(
+            downloadedPackage = openedDownloadedPackage!!,
+            onBack = { openedDownloadedPackage = null }
+        )
+
+        return
+    }
+
     if (selectedPackage != null) {
         PackageDetailsScreen(
             selectedPackage = selectedPackage!!,
@@ -104,6 +119,11 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
             onBack = {
                 selectedPackage = null
                 downloadState = DownloadUiState.Idle
+            },
+            onOpenOffline = {
+                openedDownloadedPackage = downloadedPackages.firstOrNull {
+                    it.name == selectedPackage!!.name
+                }
             },
             onDownload = {
                 coroutineScope.launch {
@@ -192,7 +212,10 @@ fun HexReaderHome(modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            DownloadedDocumentationSection(downloadedPackages = downloadedPackages)
+            DownloadedDocumentationSection(
+                downloadedPackages = downloadedPackages,
+                onOpenDownloadedPackage = { openedDownloadedPackage = it }
+            )
         }
     }
 }
@@ -492,6 +515,7 @@ private fun PackageDetailsScreen(
     downloadState: DownloadUiState,
     isAlreadyDownloaded: Boolean,
     onBack: () -> Unit,
+    onOpenOffline: () -> Unit,
     onDownload: () -> Unit
 ) {
     Box(
@@ -514,7 +538,9 @@ private fun PackageDetailsScreen(
                 .padding(horizontal = 24.dp, vertical = 24.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 IconButton(onClick = onBack) {
@@ -645,6 +671,17 @@ private fun PackageDetailsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    if (isAlreadyDownloaded) {
+                        Button(
+                            onClick = onOpenOffline,
+                            shape = RoundedCornerShape(18.dp)
+                        ) {
+                            Text(text = stringResource(R.string.package_details_open_offline_button))
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     Button(
                         onClick = onDownload,
                         enabled = downloadState !is DownloadUiState.Loading,
@@ -670,6 +707,83 @@ private fun PackageDetailsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OfflineReaderScreen(
+    downloadedPackage: DownloadedPackage,
+    onBack: () -> Unit
+) {
+    val missingTitle = stringResource(R.string.offline_reader_missing_title)
+    val missingDescription = stringResource(R.string.offline_reader_missing_description)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.offline_reader_back)
+                )
+            }
+
+            Column {
+                Text(
+                    text = stringResource(R.string.offline_reader_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = downloadedPackage.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { context ->
+                WebView(context).apply {
+                    webViewClient = WebViewClient()
+                    settings.javaScriptEnabled = false
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    settings.domStorageEnabled = false
+                }
+            },
+            update = { webView ->
+                val file = File(downloadedPackage.localIndexPath)
+                if (file.exists()) {
+                    val html = file.readText()
+                    val baseUrl = file.parentFile?.toURI()?.toString()
+                    webView.loadDataWithBaseURL(
+                        baseUrl,
+                        html,
+                        "text/html",
+                        "utf-8",
+                        null
+                    )
+                } else {
+                    webView.loadData(
+                        "<html><body><h2>$missingTitle</h2><p>$missingDescription</p></body></html>",
+                        "text/html",
+                        "utf-8"
+                    )
+                }
+            }
+        )
     }
 }
 
@@ -723,7 +837,10 @@ private fun PackageBadge(text: String, emphasized: Boolean = true) {
 }
 
 @Composable
-private fun DownloadedDocumentationSection(downloadedPackages: List<DownloadedPackage>) {
+private fun DownloadedDocumentationSection(
+    downloadedPackages: List<DownloadedPackage>,
+    onOpenDownloadedPackage: (DownloadedPackage) -> Unit
+) {
     SectionTitle(text = stringResource(R.string.downloaded_docs_title))
 
     Spacer(modifier = Modifier.height(12.dp))
@@ -776,7 +893,9 @@ private fun DownloadedDocumentationSection(downloadedPackages: List<DownloadedPa
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             downloadedPackages.forEach { item ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenDownloadedPackage(item) },
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surface
@@ -812,6 +931,15 @@ private fun DownloadedDocumentationSection(downloadedPackages: List<DownloadedPa
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = stringResource(R.string.downloaded_docs_open_offline),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }

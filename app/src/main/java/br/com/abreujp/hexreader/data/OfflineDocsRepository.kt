@@ -3,11 +3,14 @@ package br.com.abreujp.hexreader.data
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.net.URI
+import java.util.ArrayDeque
 
 class OfflineDocsRepository(
     context: Context,
@@ -26,38 +29,154 @@ class OfflineDocsRepository(
 
         storageDir.mkdirs()
 
-        val packageDir = File(storageDir, sanitizePackageName(pkg.name)).apply { mkdirs() }
-        val indexFile = File(packageDir, "index.html")
-
-        val request = Request.Builder()
-            .url(pkg.docsUrl)
-            .get()
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("Failed to download docs with status ${response.code}")
-            }
-
-            val html = response.body?.string().orEmpty()
-            if (html.isBlank()) {
-                throw IllegalStateException("Downloaded docs are empty")
-            }
-
-            indexFile.writeText(html)
+        val packageDir = File(storageDir, sanitizePackageName(pkg.name)).apply {
+            deleteRecursively()
+            mkdirs()
         }
+
+        val baseUrl = pkg.docsUrl.ensureTrailingSlash()
+        val entryPath = mirrorDocs(baseUrl, packageDir)
+        val entryFile = File(packageDir, entryPath)
 
         val downloadedPackage = DownloadedPackage(
             name = pkg.name,
             description = pkg.description,
             latestVersion = pkg.latestVersion,
             docsUrl = pkg.docsUrl,
-            localIndexPath = indexFile.absolutePath,
+            localIndexPath = entryFile.absolutePath,
             downloadedAt = System.currentTimeMillis()
         )
 
         upsertMetadata(downloadedPackage)
         downloadedPackage
+    }
+
+    private fun mirrorDocs(baseUrl: String, packageDir: File): String {
+        val baseHttpUrl = baseUrl.toHttpUrl()
+        val initialEntry = determineEntryPath(baseHttpUrl)
+        val queue = ArrayDeque<String>()
+        val visited = mutableSetOf<String>()
+
+        queue.add(initialEntry)
+        if (initialEntry != "index.html") {
+            queue.add("index.html")
+        }
+
+        while (queue.isNotEmpty()) {
+            val relativePath = queue.removeFirst()
+            if (!visited.add(relativePath)) continue
+
+            val resource = fetchResource(baseHttpUrl, relativePath) ?: continue
+            val destinationFile = File(packageDir, relativePath).normalize()
+            destinationFile.parentFile?.mkdirs()
+            destinationFile.writeBytes(resource.body)
+
+            when (resource.kind) {
+                ResourceKind.Html -> {
+                    val html = resource.body.toString(Charsets.UTF_8)
+                    extractHtmlPaths(html, relativePath, baseHttpUrl).forEach { nextPath ->
+                        if (nextPath !in visited) queue.add(nextPath)
+                    }
+                }
+
+                ResourceKind.Css -> {
+                    val css = resource.body.toString(Charsets.UTF_8)
+                    extractCssPaths(css, relativePath, baseHttpUrl).forEach { nextPath ->
+                        if (nextPath !in visited) queue.add(nextPath)
+                    }
+                }
+
+                ResourceKind.Binary -> Unit
+            }
+        }
+
+        return initialEntry
+    }
+
+    private fun determineEntryPath(baseHttpUrl: okhttp3.HttpUrl): String {
+        fetchResource(baseHttpUrl, "api-reference.html")?.let {
+            return "api-reference.html"
+        }
+
+        val rootResource = fetchResource(baseHttpUrl, "index.html")
+            ?: throw IllegalStateException("Failed to download docs entry page")
+
+        val rootHtml = rootResource.body.toString(Charsets.UTF_8)
+        val redirectTarget = extractMetaRefreshTarget(rootHtml)
+
+        return redirectTarget
+            ?.let { resolvePath(it, "index.html", baseHttpUrl).firstOrNull() }
+            ?: "index.html"
+    }
+
+    private fun fetchResource(baseHttpUrl: okhttp3.HttpUrl, relativePath: String): DownloadedResource? {
+        val url = baseHttpUrl.resolve(relativePath) ?: return null
+        val request = Request.Builder().url(url).get().build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return null
+
+            val body = response.body?.bytes() ?: return null
+            if (body.isEmpty()) return null
+
+            val contentType = response.header("Content-Type").orEmpty()
+
+            return DownloadedResource(
+                body = body,
+                kind = resourceKind(contentType, relativePath)
+            )
+        }
+    }
+
+    private fun extractHtmlPaths(html: String, currentPath: String, baseHttpUrl: okhttp3.HttpUrl): List<String> {
+        val attributeValues = trackedAttributes.flatMap { attribute ->
+            Regex("""$attribute\s*=\s*[\"']([^\"']+)[\"']""", RegexOption.IGNORE_CASE)
+                .findAll(html)
+                .map { match -> match.groupValues[1] }
+                .toList()
+        }
+
+        val metaRefresh = extractMetaRefreshTarget(html)?.let { listOf(it) }.orEmpty()
+
+        return (attributeValues + metaRefresh)
+            .flatMap { value -> resolvePath(value, currentPath, baseHttpUrl) }
+            .distinct()
+    }
+
+    private fun extractCssPaths(css: String, currentPath: String, baseHttpUrl: okhttp3.HttpUrl): List<String> {
+        return Regex("""url\(\s*['\"]?([^'\")\s]+)['\"]?\s*\)""")
+            .findAll(css)
+            .map { it.groupValues[1] }
+            .flatMap { value -> resolvePath(value, currentPath, baseHttpUrl) }
+            .distinct()
+            .toList()
+    }
+
+    private fun resolvePath(value: String, currentPath: String, baseHttpUrl: okhttp3.HttpUrl): List<String> {
+        if (ignoredReference(value)) return emptyList()
+
+        val currentUrl = baseHttpUrl.resolve(currentPath) ?: return emptyList()
+        val resolvedUrl = URI(currentUrl.toString()).resolve(value)
+        val resolvedPath = resolvedUrl.path ?: return emptyList()
+        val basePath = baseHttpUrl.encodedPath
+
+        if (!resolvedPath.startsWith(basePath) || ignoredExtension(resolvedPath)) {
+            return emptyList()
+        }
+
+        val localPath = toLocalPath(resolvedPath, basePath)
+        return if (localPath.isBlank()) emptyList() else listOf(localPath)
+    }
+
+    private fun toLocalPath(resolvedPath: String, basePath: String): String {
+        val trimmedBase = basePath.trimStart('/').trimEnd('/')
+        val normalizedPath = resolvedPath.trimStart('/').normalizeTrailingSlash()
+
+        return when {
+            normalizedPath == trimmedBase -> "index.html"
+            normalizedPath.startsWith("$trimmedBase/") -> normalizedPath.removePrefix("$trimmedBase/")
+            else -> normalizedPath
+        }
     }
 
     private fun readMetadata(): List<DownloadedPackage> {
@@ -88,6 +207,63 @@ class OfflineDocsRepository(
     private fun sanitizePackageName(name: String): String {
         return name.replace(Regex("[^A-Za-z0-9_.-]"), "_")
     }
+
+    private fun ignoredReference(value: String): Boolean {
+        return value.isBlank() ||
+            value.startsWith("#") ||
+            value.startsWith("mailto:") ||
+            value.startsWith("javascript:") ||
+            value.startsWith("data:")
+    }
+
+    private fun ignoredExtension(path: String): Boolean {
+        val lower = path.lowercase()
+        return ignoredExtensions.any { lower.endsWith(it) }
+    }
+
+    private fun resourceKind(contentType: String, path: String): ResourceKind {
+        val lowerContentType = contentType.lowercase()
+        val lowerPath = path.lowercase()
+
+        return when {
+            lowerContentType.contains("text/css") || lowerPath.endsWith(".css") -> ResourceKind.Css
+            lowerContentType.contains("text/html") || lowerPath.endsWith(".html") || lowerPath == "index.html" -> ResourceKind.Html
+            else -> ResourceKind.Binary
+        }
+    }
+
+    private data class DownloadedResource(
+        val body: ByteArray,
+        val kind: ResourceKind
+    )
+
+    private enum class ResourceKind {
+        Html,
+        Css,
+        Binary
+    }
+
+    private companion object {
+        val trackedAttributes = listOf("href", "src", "action")
+        val ignoredExtensions = listOf(".epub", ".pdf", ".zip", ".tar", ".gz")
+    }
+}
+
+private fun String.ensureTrailingSlash(): String {
+    return if (endsWith('/')) this else "$this/"
+}
+
+private fun String.normalizeTrailingSlash(): String {
+    return if (endsWith('/')) "${this}index.html" else this
+}
+
+private fun extractMetaRefreshTarget(html: String): String? {
+    val regex = Regex(
+        """<meta[^>]+http-equiv=[\"']refresh[\"'][^>]+content=[\"'][^\"']*url=([^\"'>]+)[\"']""",
+        RegexOption.IGNORE_CASE
+    )
+
+    return regex.find(html)?.groupValues?.getOrNull(1)?.trim()
 }
 
 private fun DownloadedPackage.toJson(): JSONObject {

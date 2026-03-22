@@ -26,6 +26,7 @@
     <string name="downloaded_docs_title">Downloaded documentation</string>
     <string name="downloaded_docs_badge">Offline library</string>
     <string name="downloaded_docs_saved_badge">saved offline</string>
+    <string name="downloaded_docs_open_offline">Open offline reader</string>
     <string name="empty_downloaded_docs_title">No downloaded documentation yet</string>
     <string name="empty_downloaded_docs_description">Downloaded packages will appear here for offline reading.</string>
     <string name="package_details_back">Back to search</string>
@@ -39,6 +40,11 @@
     <string name="package_details_downloaded_description">This package already has offline docs saved locally. You can download it again to refresh the stored page.</string>
     <string name="package_details_download_button">Download docs</string>
     <string name="package_details_redownload_button">Download again</string>
+    <string name="package_details_open_offline_button">Open offline docs</string>
     <string name="package_details_download_success">Offline docs saved successfully.</string>
     <string name="package_details_download_error">The docs could not be downloaded right now. Try again in a moment.</string>
+    <string name="offline_reader_back">Back to package details</string>
+    <string name="offline_reader_title">Offline reader</string>
+    <string name="offline_reader_missing_title">Offline file not found</string>
+    <string name="offline_reader_missing_description">The saved HTML file is missing. Download the package again to restore it.</string>
 </resources>
