@@ -83,23 +83,26 @@ fun HomeScreen(
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             }
+            DownloadedDocumentationSection(
+                downloadedPackages = uiState.downloadedPackages,
+                onOpenDownloadedPackage = onOpenDownloadedPackage,
+                onDeleteDownloadedPackage = onDeleteDownloadedPackage
+            )
+            Spacer(modifier = Modifier.height(20.dp))
             SearchSection(
                 searchQuery = uiState.searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
                 onSearch = onSearch
             )
             Spacer(modifier = Modifier.height(20.dp))
-            SearchResultsSection(
-                submittedQuery = uiState.submittedQuery,
-                searchState = uiState.searchState,
-                onPackageSelected = onPackageSelected
-            )
-            Spacer(modifier = Modifier.height(28.dp))
-            DownloadedDocumentationSection(
-                downloadedPackages = uiState.downloadedPackages,
-                onOpenDownloadedPackage = onOpenDownloadedPackage,
-                onDeleteDownloadedPackage = onDeleteDownloadedPackage
-            )
+            val hasSearched = uiState.submittedQuery != null || uiState.searchState !is SearchUiState.Idle
+            if (hasSearched) {
+                SearchResultsSection(
+                    submittedQuery = uiState.submittedQuery,
+                    searchState = uiState.searchState,
+                    onPackageSelected = onPackageSelected
+                )
+            }
         }
     }
 }

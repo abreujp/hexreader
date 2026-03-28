@@ -132,7 +132,9 @@ class HomeViewModel(
             val nextState = try {
                 offlineRepository.downloadPackage(selectedPackage)
                 val refreshedPackages = offlineRepository.listDownloadedPackages()
-                _uiState.update { current -> current.copy(downloadedPackages = refreshedPackages) }
+                _uiState.update { current ->
+                    current.copy(downloadedPackages = refreshedPackages)
+                }
                 DownloadUiState.Success(app.getString(R.string.package_details_download_success))
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to download docs for ${selectedPackage.name}", exception)

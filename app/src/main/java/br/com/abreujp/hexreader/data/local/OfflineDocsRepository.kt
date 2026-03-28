@@ -57,6 +57,7 @@ class OfflineDocsRepository(
         val entryPath = try {
             mirrorDocs(docsUrl, packageDir)
         } catch (exception: Exception) {
+            packageDir.deleteRecursively()
             Log.e(TAG, "Failed to mirror Elixir docs from $docsUrl", exception)
             throw IllegalStateException(
                 exception.message ?: "Failed to download Elixir docs",
@@ -91,6 +92,7 @@ class OfflineDocsRepository(
         val entryPath = try {
             mirrorDocs(pkg.docsUrl.ensureTrailingSlash(), packageDir)
         } catch (exception: Exception) {
+            packageDir.deleteRecursively()
             Log.e(TAG, "Failed to mirror docs for ${pkg.name} from ${pkg.docsUrl}", exception)
             throw IllegalStateException(
                 exception.message ?: "Failed to download package docs",
