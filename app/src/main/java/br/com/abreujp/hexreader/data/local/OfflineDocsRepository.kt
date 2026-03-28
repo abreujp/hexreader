@@ -40,6 +40,44 @@ class OfflineDocsRepository(
         metadataFile.writeText(array.toString())
     }
 
+    suspend fun downloadElixirDocs(): DownloadedPackage = withContext(Dispatchers.IO) {
+        val docsUrl = "https://hexdocs.pm/elixir/"
+        val packageName = "elixir"
+        val description = "Elixir programming language documentation"
+
+        storageDir.mkdirs()
+
+        val packageDir = File(storageDir, sanitizePackageName(packageName)).apply {
+            deleteRecursively()
+            mkdirs()
+        }
+
+        val elixirVersion = fetchElixirVersion(docsUrl)
+
+        val entryPath = try {
+            mirrorDocs(docsUrl, packageDir)
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to mirror Elixir docs from $docsUrl", exception)
+            throw IllegalStateException(
+                exception.message ?: "Failed to download Elixir docs",
+                exception
+            )
+        }
+        val entryFile = File(packageDir, entryPath)
+
+        val downloadedPackage = DownloadedPackage(
+            name = packageName,
+            description = description,
+            latestVersion = elixirVersion,
+            docsUrl = docsUrl,
+            localIndexPath = entryFile.absolutePath,
+            downloadedAt = System.currentTimeMillis()
+        )
+
+        upsertMetadata(downloadedPackage)
+        downloadedPackage
+    }
+
     suspend fun downloadPackage(pkg: HexPackageSummary): DownloadedPackage = withContext(Dispatchers.IO) {
         require(pkg.docsUrl.isNotBlank()) { "Package has no docs URL" }
 
@@ -277,6 +315,15 @@ class OfflineDocsRepository(
         Html,
         Css,
         Binary
+    }
+
+    private fun fetchElixirVersion(docsUrl: String): String {
+        val baseHttpUrl = docsUrl.toHttpUrl()
+        val resource = fetchResource(baseHttpUrl, "index.html") ?: return "latest"
+        val html = resource.body.toString(Charsets.UTF_8)
+        val titleMatch = Regex("""<title>Elixir\s+(v[\d.]+)""", RegexOption.IGNORE_CASE)
+            .find(html)
+        return titleMatch?.groupValues?.getOrNull(1) ?: "latest"
     }
 
     private companion object {

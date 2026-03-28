@@ -50,7 +50,8 @@ fun HomeScreen(
     onSearch: () -> Unit,
     onPackageSelected: (HexPackageSummary) -> Unit,
     onOpenDownloadedPackage: (DownloadedPackage) -> Unit,
-    onDeleteDownloadedPackage: (DownloadedPackage) -> Unit
+    onDeleteDownloadedPackage: (DownloadedPackage) -> Unit,
+    onDownloadElixirDocs: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -74,6 +75,14 @@ fun HomeScreen(
         ) {
             HeaderSection()
             Spacer(modifier = Modifier.height(28.dp))
+            val isElixirDocsDownloaded = uiState.downloadedPackages.any { it.name == "elixir" }
+            if (!isElixirDocsDownloaded) {
+                ElixirDocsSection(
+                    downloadState = uiState.downloadState,
+                    onDownloadElixirDocs = onDownloadElixirDocs
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
             SearchSection(
                 searchQuery = uiState.searchQuery,
                 onSearchQueryChange = onSearchQueryChange,
@@ -98,26 +107,6 @@ fun HomeScreen(
 @Composable
 private fun HeaderSection() {
     Column {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = CircleShape
-                    )
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.header_badge),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineLarge,
@@ -131,6 +120,80 @@ private fun HeaderSection() {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+@Composable
+private fun ElixirDocsSection(
+    downloadState: DownloadUiState,
+    onDownloadElixirDocs: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = stringResource(R.string.elixir_docs_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.elixir_docs_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            when (downloadState) {
+                is DownloadUiState.Loading -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.elixir_docs_downloading),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+
+                is DownloadUiState.Error -> {
+                    Text(
+                        text = downloadState.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = onDownloadElixirDocs,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(text = stringResource(R.string.elixir_docs_button))
+                    }
+                }
+
+                else -> {
+                    Button(
+                        onClick = onDownloadElixirDocs,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(text = stringResource(R.string.elixir_docs_button))
+                    }
+                }
+            }
+        }
     }
 }
 

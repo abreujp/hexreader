@@ -25,7 +25,8 @@ fun HexReaderApp() {
                 onSearch = viewModel::onSearch,
                 onPackageSelected = viewModel::openPackageDetails,
                 onOpenDownloadedPackage = viewModel::openOfflineReader,
-                onDeleteDownloadedPackage = viewModel::deleteDownloadedPackage
+                onDeleteDownloadedPackage = viewModel::deleteDownloadedPackage,
+                onDownloadElixirDocs = viewModel::downloadElixirDocs
             )
         }
 

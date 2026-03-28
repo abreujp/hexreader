@@ -145,6 +145,33 @@ class HomeViewModel(
         }
     }
 
+    fun downloadElixirDocs() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(downloadState = DownloadUiState.Loading) }
+
+            val nextState = try {
+                val downloaded = offlineRepository.downloadElixirDocs()
+                val refreshedPackages = offlineRepository.listDownloadedPackages()
+                _uiState.update { current ->
+                    current.copy(
+                        downloadedPackages = refreshedPackages,
+                        openedDownloadedPackage = downloaded,
+                        screen = HexReaderScreen.OfflineReader,
+                        downloadState = DownloadUiState.Idle
+                    )
+                }
+                return@launch
+            } catch (exception: Exception) {
+                Log.e(TAG, "Failed to download Elixir docs", exception)
+                val message = exception.message?.takeIf { it.isNotBlank() }
+                    ?: app.getString(R.string.elixir_docs_download_error)
+                DownloadUiState.Error(message)
+            }
+
+            _uiState.update { it.copy(downloadState = nextState) }
+        }
+    }
+
     fun deleteSelectedPackage() {
         val selectedPackage = _uiState.value.selectedPackage ?: return
         deletePackageByName(selectedPackage.name)

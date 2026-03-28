@@ -2,6 +2,11 @@
     <string name="app_name">HexReader</string>
     <string name="home_subtitle">Offline HexDocs reader</string>
     <string name="header_badge">Hex.pm docs</string>
+    <string name="elixir_docs_title">Elixir language docs</string>
+    <string name="elixir_docs_description">Download the official Elixir programming language documentation for offline reading.</string>
+    <string name="elixir_docs_button">Download Elixir docs</string>
+    <string name="elixir_docs_downloading">Downloading Elixir docs…</string>
+    <string name="elixir_docs_download_error">Failed to download Elixir documentation. Check your connection and try again.</string>
     <string name="search_library_title">Search library</string>
     <string name="search_library_description">Search Hex.pm packages and save their docs for offline reading on Android.</string>
     <string name="search_library_input_label">Package name</string>
