@@ -15,6 +15,8 @@ Offline HexDocs reader for Android. Browse and download [Hex.pm](https://hex.pm)
 
 ## Download
 
+[![Downloads](https://img.shields.io/github/downloads/abreujp/hexreader/v1.0.0/total.svg)](../../releases)
+
 Get the latest APK from [Releases](../../releases).
 
 Minimum Android version: **8.0** (API 26)
